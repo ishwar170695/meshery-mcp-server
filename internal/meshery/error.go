@@ -8,11 +8,11 @@ import (
 )
 
 var (
-	ErrInvalidBaseURLCode    = "replace_me"
-	ErrInvalidTimeoutCode    = "replace_me"
-	ErrInvalidRetryCountCode = "replace_me"
-	ErrHTTPRequestCode       = "replace_me"
-	ErrAPIResponseCode       = "replace_me"
+	ErrInvalidBaseURLCode    = "1001"
+	ErrInvalidTimeoutCode    = "1002"
+	ErrInvalidRetryCountCode = "1003"
+	ErrHTTPRequestCode       = "1004"
+	ErrAPIResponseCode       = "1005"
 )
 
 // ErrInvalidBaseURL returns a MeshKit Error when base URL parsing or scheme validation fails.
