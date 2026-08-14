@@ -12,6 +12,7 @@ import (
 type Config struct {
 	BaseURL    string        `json:"base_url" yaml:"base_url"`
 	Token      string        `json:"token" yaml:"token"`
+	Provider   string        `json:"provider" yaml:"provider"`
 	Timeout    time.Duration `json:"timeout" yaml:"timeout"`
 	RetryCount int           `json:"retry_count" yaml:"retry_count"`
 	UserAgent  string        `json:"user_agent" yaml:"user_agent"`
@@ -31,7 +32,7 @@ func DefaultConfig() Config {
 }
 
 // LoadConfig constructs a Config by applying setting sources in explicit precedence order:
-// Environment Variables (MESHERY_SERVER_URL, MESHERY_API_TOKEN) > Config File (JSON) > Defaults.
+// Environment Variables (MESHERY_SERVER_URL, MESHERY_API_TOKEN, MESHERY_PROVIDER) > Config File (JSON) > Defaults.
 func LoadConfig(path string) (Config, error) {
 	cfg := DefaultConfig()
 
@@ -41,16 +42,30 @@ func LoadConfig(path string) (Config, error) {
 			return cfg, fmt.Errorf("failed to read config file %q: %w", path, err)
 		}
 
-		var fileCfg Config
+		var fileCfg struct {
+			Config
+			Endpoint  string `json:"endpoint" yaml:"endpoint"`
+			URL       string `json:"url" yaml:"url"`
+			ServerURL string `json:"server_url" yaml:"server_url"`
+		}
 		if err := json.Unmarshal(data, &fileCfg); err != nil {
 			return cfg, fmt.Errorf("failed to parse config file %q: %w", path, err)
 		}
 
 		if fileCfg.BaseURL != "" {
 			cfg.BaseURL = fileCfg.BaseURL
+		} else if fileCfg.Endpoint != "" {
+			cfg.BaseURL = fileCfg.Endpoint
+		} else if fileCfg.URL != "" {
+			cfg.BaseURL = fileCfg.URL
+		} else if fileCfg.ServerURL != "" {
+			cfg.BaseURL = fileCfg.ServerURL
 		}
 		if fileCfg.Token != "" {
 			cfg.Token = fileCfg.Token
+		}
+		if fileCfg.Provider != "" {
+			cfg.Provider = fileCfg.Provider
 		}
 		if fileCfg.Timeout > 0 {
 			cfg.Timeout = fileCfg.Timeout
@@ -68,6 +83,9 @@ func LoadConfig(path string) (Config, error) {
 	}
 	if envToken := os.Getenv("MESHERY_API_TOKEN"); envToken != "" {
 		cfg.Token = envToken
+	}
+	if envProvider := os.Getenv("MESHERY_PROVIDER"); envProvider != "" {
+		cfg.Provider = envProvider
 	}
 
 	return cfg, nil

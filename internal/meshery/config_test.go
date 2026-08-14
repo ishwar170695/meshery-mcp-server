@@ -10,6 +10,7 @@ import (
 func TestLoadConfig_Defaults(t *testing.T) {
 	t.Setenv("MESHERY_SERVER_URL", "")
 	t.Setenv("MESHERY_API_TOKEN", "")
+	t.Setenv("MESHERY_PROVIDER", "")
 
 	cfg, err := LoadConfig("")
 	if err != nil {
@@ -33,12 +34,14 @@ func TestLoadConfig_Defaults(t *testing.T) {
 func TestLoadConfig_ConfigFile_PartialOverride(t *testing.T) {
 	t.Setenv("MESHERY_SERVER_URL", "")
 	t.Setenv("MESHERY_API_TOKEN", "")
+	t.Setenv("MESHERY_PROVIDER", "")
 
 	tmpDir := t.TempDir()
 	filePath := filepath.Join(tmpDir, "config.json")
 	content := `{
 		"base_url": "https://meshery.example.com",
-		"token": "file-token-123"
+		"token": "file-token-123",
+		"provider": "Meshery"
 	}`
 
 	if err := os.WriteFile(filePath, []byte(content), 0644); err != nil {
@@ -56,6 +59,9 @@ func TestLoadConfig_ConfigFile_PartialOverride(t *testing.T) {
 	if cfg.Token != "file-token-123" {
 		t.Errorf("expected Token from file 'file-token-123', got %q", cfg.Token)
 	}
+	if cfg.Provider != "Meshery" {
+		t.Errorf("expected Provider from file 'Meshery', got %q", cfg.Provider)
+	}
 	if cfg.Timeout != 10*time.Second {
 		t.Errorf("expected default Timeout 10s preserved, got %v", cfg.Timeout)
 	}
@@ -64,12 +70,39 @@ func TestLoadConfig_ConfigFile_PartialOverride(t *testing.T) {
 	}
 }
 
+func TestLoadConfig_ConfigFile_EndpointAlias(t *testing.T) {
+	t.Setenv("MESHERY_SERVER_URL", "")
+	t.Setenv("MESHERY_API_TOKEN", "")
+	t.Setenv("MESHERY_PROVIDER", "")
+
+	tmpDir := t.TempDir()
+	filePath := filepath.Join(tmpDir, "config_endpoint.json")
+	content := `{
+		"endpoint": "http://meshery.local:9081",
+		"token": "endpoint-token"
+	}`
+
+	if err := os.WriteFile(filePath, []byte(content), 0644); err != nil {
+		t.Fatalf("failed to create temp config file: %v", err)
+	}
+
+	cfg, err := LoadConfig(filePath)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if cfg.BaseURL != "http://meshery.local:9081" {
+		t.Errorf("expected BaseURL from endpoint alias 'http://meshery.local:9081', got %q", cfg.BaseURL)
+	}
+}
+
 func TestLoadConfig_EnvironmentVariables(t *testing.T) {
 	tmpDir := t.TempDir()
 	filePath := filepath.Join(tmpDir, "config.json")
 	content := `{
 		"base_url": "https://file.example.com",
-		"token": "file-token"
+		"token": "file-token",
+		"provider": "FileProvider"
 	}`
 
 	if err := os.WriteFile(filePath, []byte(content), 0644); err != nil {
@@ -78,6 +111,7 @@ func TestLoadConfig_EnvironmentVariables(t *testing.T) {
 
 	t.Setenv("MESHERY_SERVER_URL", "https://env.example.com:9081")
 	t.Setenv("MESHERY_API_TOKEN", "env-token-xyz")
+	t.Setenv("MESHERY_PROVIDER", "None")
 
 	cfg, err := LoadConfig(filePath)
 	if err != nil {
@@ -90,11 +124,15 @@ func TestLoadConfig_EnvironmentVariables(t *testing.T) {
 	if cfg.Token != "env-token-xyz" {
 		t.Errorf("expected Token from env 'env-token-xyz', got %q", cfg.Token)
 	}
+	if cfg.Provider != "None" {
+		t.Errorf("expected Provider from env 'None', got %q", cfg.Provider)
+	}
 }
 
 func TestLoadConfig_FileNotFound(t *testing.T) {
 	t.Setenv("MESHERY_SERVER_URL", "")
 	t.Setenv("MESHERY_API_TOKEN", "")
+	t.Setenv("MESHERY_PROVIDER", "")
 
 	_, err := LoadConfig("/nonexistent/path/config.json")
 	if err == nil {
@@ -105,6 +143,7 @@ func TestLoadConfig_FileNotFound(t *testing.T) {
 func TestLoadConfig_InvalidJSON(t *testing.T) {
 	t.Setenv("MESHERY_SERVER_URL", "")
 	t.Setenv("MESHERY_API_TOKEN", "")
+	t.Setenv("MESHERY_PROVIDER", "")
 
 	tmpDir := t.TempDir()
 	filePath := filepath.Join(tmpDir, "invalid.json")

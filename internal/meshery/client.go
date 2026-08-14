@@ -48,13 +48,15 @@ func NewClient(cfg Config) (*Client, error) {
 		return nil, ErrInvalidRetryCount(cfg.RetryCount)
 	}
 
-	httpClient := cfg.HTTPClient
-	if httpClient == nil {
+	var httpClient *http.Client
+	if cfg.HTTPClient == nil {
 		httpClient = &http.Client{
 			Timeout: cfg.Timeout,
 		}
 	} else {
-		httpClient.Timeout = cfg.Timeout
+		copiedClient := *cfg.HTTPClient
+		copiedClient.Timeout = cfg.Timeout
+		httpClient = &copiedClient
 	}
 
 	return &Client{
@@ -119,6 +121,16 @@ func (c *Client) do(
 		}
 		if c.cfg.Token != "" {
 			req.Header.Set("Authorization", "Bearer "+c.cfg.Token)
+			req.AddCookie(&http.Cookie{
+				Name:  "token",
+				Value: c.cfg.Token,
+			})
+			if c.cfg.Provider != "" {
+				req.AddCookie(&http.Cookie{
+					Name:  "meshery-provider",
+					Value: c.cfg.Provider,
+				})
+			}
 		}
 
 		resp, err := c.http.Do(req)

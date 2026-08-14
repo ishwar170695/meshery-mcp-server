@@ -70,7 +70,8 @@ func TestNewClient_ValidatesBaseURLSchemeAndHost(t *testing.T) {
 func TestNewClient_CustomHTTPClient_RespectsTimeout(t *testing.T) {
 	t.Parallel()
 
-	customClient := &http.Client{Timeout: 1 * time.Second}
+	customTransport := &http.Transport{}
+	customClient := &http.Client{Timeout: 1 * time.Second, Transport: customTransport}
 	client, err := NewClient(Config{
 		BaseURL:    "http://localhost:9081",
 		Timeout:    10 * time.Second,
@@ -80,11 +81,14 @@ func TestNewClient_CustomHTTPClient_RespectsTimeout(t *testing.T) {
 		t.Fatalf("failed to create client: %v", err)
 	}
 
-	if client.http != customClient {
-		t.Fatal("expected supplied HTTPClient instance to be reused")
+	if client.http.Transport != customTransport {
+		t.Fatal("expected supplied Transport to be preserved in copied client")
+	}
+	if customClient.Timeout != 1*time.Second {
+		t.Errorf("expected caller HTTPClient timeout to remain 1s, got %v", customClient.Timeout)
 	}
 	if client.http.Timeout != 10*time.Second {
-		t.Errorf("expected custom client timeout to be set to 10s, got %v", client.http.Timeout)
+		t.Errorf("expected client timeout to be set to 10s, got %v", client.http.Timeout)
 	}
 }
 
@@ -130,20 +134,27 @@ func TestPing_UnreachableServer_ReturnsDescriptiveError(t *testing.T) {
 	}
 }
 
-func TestClient_AllHTTPCalls_IncludeAuthorizationHeader(t *testing.T) {
+func TestClient_AllHTTPCalls_IncludeAuthorizationHeaderAndCookies(t *testing.T) {
 	t.Parallel()
 
 	token := "test-secret-token"
-	var receivedToken string
+	provider := "Meshery"
+	var receivedToken, receivedTokenCookie, receivedProviderCookie string
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		receivedToken = r.Header.Get("Authorization")
+		if ck, err := r.Cookie("token"); err == nil {
+			receivedTokenCookie = ck.Value
+		}
+		if ck, err := r.Cookie("meshery-provider"); err == nil {
+			receivedProviderCookie = ck.Value
+		}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(Version{Build: "v1.0"})
 	}))
 	defer ts.Close()
 
-	client, err := NewClient(Config{BaseURL: ts.URL, Token: token, Timeout: 5 * time.Second})
+	client, err := NewClient(Config{BaseURL: ts.URL, Token: token, Provider: provider, Timeout: 5 * time.Second})
 	if err != nil {
 		t.Fatalf("failed to create client: %v", err)
 	}
@@ -154,6 +165,12 @@ func TestClient_AllHTTPCalls_IncludeAuthorizationHeader(t *testing.T) {
 	}
 	if expectedAuth := "Bearer " + token; receivedToken != expectedAuth {
 		t.Errorf("expected Authorization header %q, got %q", expectedAuth, receivedToken)
+	}
+	if receivedTokenCookie != token {
+		t.Errorf("expected token cookie %q, got %q", token, receivedTokenCookie)
+	}
+	if receivedProviderCookie != provider {
+		t.Errorf("expected meshery-provider cookie %q, got %q", provider, receivedProviderCookie)
 	}
 }
 
